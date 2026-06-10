@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+.env.local
+.env.*
 
 # vercel
 .vercel
@@ -39,3 +41,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+#agent
+AGENTS.md
+CLAUDE.md
+
+
+#img
+prevenia.png
+Prevenia_Logo.png
+# prisma
+/lib/generated/prisma
+prisma/dev.db
+prisma/dev.db-journal
