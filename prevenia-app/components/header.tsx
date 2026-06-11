@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react"; 
+import Image from "next/image";
 
 export default function Header() {
   const { data: session, status } = useSession();
@@ -12,21 +13,28 @@ export default function Header() {
   };
 
   return (
-    // CONTENEDOR FLOTANTE (Centrado con max-width para no estirarse al infinito)
+    // CONTENEDOR FLOTANTE
     <div className="fixed top-6 left-1/2 -translate-x-1/2 w-full max-w-5xl z-50 px-4">
       
       {/* LA PÍLDORA ACRÍLICA (Glassmorphism + Rounded Full) */}
       <header className="bg-white/80 backdrop-blur-md border border-white/60 shadow-sm rounded-full px-6 md:px-8 h-16 flex items-center justify-between">
         
         {/* LOGO DE PREVENIA */}
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="w-8 h-8 rounded-[0.8rem] bg-[#6B8E7D] flex items-center justify-center text-white font-playfair font-bold text-lg shadow-sm transition-transform group-hover:scale-105">
-            P
-          </div>
-          <span className="font-playfair text-xl tracking-wide text-[#2C332B]">
-            Prevenia
-          </span>
-        </Link>
+<Link href="/" className="flex items-center gap-2 group">
+  <div className="relative w-10 h-10 transition-transform group-hover:scale-105">
+    <Image
+      src="/prevenialogo_x16.png" // Asegúrate de que el nombre coincida con tu archivo en public/
+      alt="Logo oficial de Prevenia"
+      fill
+      sizes="(max-width: 768px) 100vw, 40px"
+      className="object-contain"
+      priority
+    />
+  </div>
+  <span className="font-playfair text-xl tracking-wide text-[#2C332B]">
+    Prevenia
+  </span>
+</Link>
 
         {/* MENÚ CENTRAL DE NAVEGACIÓN */}
         <nav className="hidden md:flex items-center gap-8 text-sm font-inter font-light text-[#2C332B]/80">
@@ -37,7 +45,7 @@ export default function Header() {
           {session?.user && (session.user as any).role === "ADMIN" && (
             <Link href="/admin">
               <span className="bg-[#E6EAE5] text-[#6B8E7D] px-3 py-1.5 rounded-full text-[11px] font-medium tracking-widest uppercase hover:bg-[#6B8E7D] hover:text-white transition-all cursor-pointer shadow-sm">
-                Portal Admin RAG
+                Portal Admin
               </span>
             </Link>
           )}

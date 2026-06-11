@@ -1,200 +1,234 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 
-export default function Diagnostic() {
+export default function DiagnosticWizard() {
+  const { data: session } = useSession(); // Para saber si hay alguien logueado
   const [step, setStep] = useState(1);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
 
-  // Función para simular el tiempo de análisis de la IA
-  const handleAnalyze = () => {
-    setIsAnalyzing(true);
-    // Simulamos un retraso de 3 segundos mientras la IA "piensa"
-    setTimeout(() => {
-      setIsAnalyzing(false);
-      setStep(3);
-    }, 3000);
+  // 1. EL ESTADO CON LOS NUEVOS DATOS MÉDICOS
+  const [formData, setFormData] = useState({
+    age: "",
+    weight: "",
+    height: "",
+    waist: "",
+    physicalActivity: "",
+    familyHistory: false,
+    fastingGlucose: "",
+    systolicPressure: "",
+  });
+
+  const updateForm = (field: string, value: any) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // 2. FUNCIÓN PARA ENVIAR A LA IA
+  const analyzeData = async () => {
+    setIsLoading(true);
+    setStep(4); // Movemos a la pantalla de carga/resultado
+
+    try {
+      const response = await fetch("/api/diagnostic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...formData,
+          userId: session?.user?.id || null, // Si hay sesión, mandamos el ID para guardarlo
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setResult(data.diagnostic);
+      } else {
+        console.error(data.error);
+        setResult({ error: "Hubo un error al procesar el análisis." });
+      }
+    } catch (error) {
+      setResult({ error: "Error de conexión." });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center pt-20 pb-20 px-4 overflow-hidden">
-      <div className="absolute rounded-full filter blur-[80px] opacity-60 bg-[#DDE6DE] w-[30rem] h-[30rem] top-[10%] left-1/2 -translate-x-1/2 -z-10 pointer-events-none" />
+    <div className="min-h-screen bg-[#F8F6F0] pt-32 pb-20 px-4 relative overflow-hidden flex flex-col items-center">
+      
+      {/* Blobs de fondo */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#6B8E7D]/10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-[30rem] h-[30rem] bg-[#EFECE5] rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Pantalla de Carga Simulada */}
-      {isAnalyzing && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#F8F6F0]/90 backdrop-blur-md"
-        >
-          <div className="w-16 h-16 border-4 border-[#6B8E7D] border-t-transparent rounded-full animate-spin mb-6"></div>
-          <h3 className="font-playfair text-2xl text-[#2C332B] mb-2">Prevenia está analizando tus datos</h3>
-          <p className="font-inter font-light text-[#2C332B]/60 text-sm">Consultando base de conocimiento médico...</p>
-        </motion.div>
-      )}
-
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className={`w-full ${step === 3 ? "max-w-4xl" : "max-w-2xl"} bg-white/80 backdrop-blur-md p-8 md:p-12 rounded-[3rem] shadow-sm border border-white relative z-10 transition-all duration-500`}
-      >
+      {/* Contenedor Principal Acrílico */}
+      <div className="w-full max-w-2xl bg-white/70 backdrop-blur-xl rounded-[3rem] shadow-sm border border-white p-8 md:p-14 relative z-10">
         
-        {/* Cabecera (Oculta en el paso 3 de resultados) */}
-        {step !== 3 && (
-          <>
-            <div className="flex justify-between items-center mb-10 text-sm">
-              <span className="font-playfair italic text-[#6B8E7D] text-lg">Paso 0{step}</span>
-              <Link href="/">
-                <button className="text-[#2C332B]/50 hover:text-[#2C332B] transition uppercase tracking-widest text-xs">Cancelar</button>
-              </Link>
+        {/* Barra de Progreso */}
+        {step < 4 && (
+          <div className="mb-10">
+            <div className="flex justify-between text-[10px] uppercase tracking-widest text-[#2C332B]/40 mb-3 font-medium">
+              <span>Paso {step} de 3</span>
+              <span>Evaluación Metabólica</span>
             </div>
-            <h2 className="text-3xl md:text-4xl font-playfair mb-10 text-[#2C332B] text-center tracking-tight">
-              {step === 1 ? "Conozcamos tu cuerpo" : "Tus biomarcadores"}
-            </h2>
-          </>
+            <div className="w-full h-1.5 bg-[#2C332B]/5 rounded-full overflow-hidden">
+              <motion.div 
+                className="h-full bg-[#6B8E7D]"
+                initial={{ width: `${((step - 1) / 3) * 100}%` }}
+                animate={{ width: `${(step / 3) * 100}%` }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+              />
+            </div>
+          </div>
         )}
 
-        {/* PASO 1: Datos Básicos */}
-        {step === 1 && (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-3 ml-2">Edad</label>
-                <input type="number" placeholder="Ej. 35" className="w-full p-4 bg-[#F8F6F0] border-none rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-lg font-inter font-light placeholder:text-[#2C332B]/30" />
-              </div>
-              <div>
-                <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-3 ml-2">Peso (kg)</label>
-                <input type="number" placeholder="Ej. 75" className="w-full p-4 bg-[#F8F6F0] border-none rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-lg font-inter font-light placeholder:text-[#2C332B]/30" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-3 ml-2">Historial Familiar de Diabetes</label>
-              <div className="flex gap-4">
-                <button className="flex-1 py-4 border border-[#2C332B]/10 rounded-2xl hover:border-[#6B8E7D] hover:text-[#6B8E7D] transition font-inter font-light focus:bg-[#E6EAE5]">Sí, existe</button>
-                <button className="flex-1 py-4 border border-[#2C332B]/10 rounded-2xl hover:border-[#6B8E7D] hover:text-[#6B8E7D] transition font-inter font-light focus:bg-[#E6EAE5]">No que yo sepa</button>
-              </div>
-            </div>
-
-            <div className="pt-8">
-              <button onClick={() => setStep(2)} className="w-full bg-[#2C332B] text-white px-8 py-4 rounded-full font-inter font-light hover:bg-[#6B8E7D] transition text-lg tracking-wide shadow-md">Continuar</button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* PASO 2: Biomarcadores */}
-        {step === 2 && (
-           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-3 ml-2 flex items-center gap-2">
-                  Glucosa en Ayunas <span className="text-[10px] bg-[#EAE2D0] px-2 py-0.5 rounded-full text-[#2C332B]/70 lowercase tracking-normal">mg/dL</span>
-                </label>
-                <input type="number" placeholder="Ej. 95" className="w-full p-4 bg-[#F8F6F0] border-none rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-lg font-inter font-light placeholder:text-[#2C332B]/30" />
-              </div>
-              <div>
-                <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-3 ml-2 flex items-center gap-2">
-                  Presión Sistólica <span className="text-[10px] bg-[#EAE2D0] px-2 py-0.5 rounded-full text-[#2C332B]/70 lowercase tracking-normal">mmHg</span>
-                </label>
-                <input type="number" placeholder="Ej. 120" className="w-full p-4 bg-[#F8F6F0] border-none rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-lg font-inter font-light placeholder:text-[#2C332B]/30" />
-              </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-[#E6EAE5]/50 border border-[#6B8E7D]/20 text-sm font-inter font-light text-[#2C332B]/80 flex gap-3">
-               <svg className="w-5 h-5 text-[#6B8E7D] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-               <p>Estos datos son cruciales para que la IA determine tu riesgo metabólico con precisión clínica.</p>
-            </div>
-             
-             <div className="pt-6 flex flex-col sm:flex-row gap-4">
-              <button onClick={() => setStep(1)} className="w-full sm:w-1/3 border border-[#2C332B]/20 text-[#2C332B] px-8 py-4 rounded-full font-inter font-light hover:bg-[#F8F6F0] transition text-lg tracking-wide shadow-sm">Volver</button>
-              {/* Botón que activa la animación de carga */}
-              <button onClick={handleAnalyze} className="w-full sm:w-2/3 bg-[#2C332B] text-white px-8 py-4 rounded-full font-inter font-light hover:bg-[#6B8E7D] transition text-lg tracking-wide shadow-md">Analizar con IA</button>
-            </div>
-           </motion.div>
-        )}
-
-        {/* PASO 3: Resultados (El Dashboard de IA) */}
-        {step === 3 && (
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-10">
-            
-            {/* Encabezado de Resultados */}
-            <div className="text-center border-b border-[#2C332B]/10 pb-8">
-              <h2 className="text-4xl font-playfair mb-4 text-[#2C332B]">Tu Evaluación de Salud</h2>
-              <p className="font-inter font-light text-[#2C332B]/70 max-w-xl mx-auto">
-                Basado en las guías de la ADA (American Diabetes Association), la IA ha analizado tus marcadores.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
+        <AnimatePresence mode="wait">
+          
+          {/* PASO 1: Biometría Básica */}
+          {step === 1 && (
+            <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+              <h2 className="text-3xl font-playfair text-[#2C332B] mb-2 tracking-tight">Biometría Básica</h2>
+              <p className="text-[#2C332B]/60 font-inter font-light text-sm mb-8">Datos esenciales para calcular tu índice de masa corporal.</p>
               
-              {/* Columna Izquierda: Medidor Visual (Gauge) */}
-              <div className="flex flex-col items-center bg-[#F8F6F0] p-8 rounded-[2rem]">
-                <span className="text-sm uppercase tracking-widest text-[#2C332B]/50 mb-6 font-inter font-medium">Nivel de Riesgo Actual</span>
-                
-                {/* Simulación de un Medidor Gráfico */}
-                <div className="relative w-48 h-24 overflow-hidden mb-6">
-                  {/* Arco base */}
-                  <div className="absolute top-0 left-0 w-full h-full border-[1.5rem] border-[#EAE2D0] rounded-t-full border-b-0"></div>
-                  {/* Arco de color animado (Riesgo Moderado) */}
-                  <motion.div 
-                    initial={{ rotate: -180 }} animate={{ rotate: -90 }} transition={{ duration: 1.5, ease: "easeOut" }}
-                    className="absolute top-0 left-0 w-full h-full border-[1.5rem] border-[#E4A853] rounded-t-full border-b-0 origin-bottom"
-                  ></motion.div>
-                </div>
-                
-                <h3 className="text-3xl font-playfair text-[#E4A853] mb-2">Moderado</h3>
-                <p className="text-center text-sm font-inter font-light text-[#2C332B]/60">Ventana de oportunidad ideal para prevención.</p>
-              </div>
-
-              {/* Columna Derecha: Explicación de la IA y Plan */}
               <div className="space-y-6">
-                <div className="bg-[#EFECE5] p-6 rounded-3xl">
-                  <div className="flex items-center gap-2 mb-3">
-                    <svg className="w-5 h-5 text-[#6B8E7D]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                    <h4 className="font-playfair text-lg text-[#2C332B]">Análisis Clínico (IA)</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Edad (años)</label>
+                    <input type="number" value={formData.age} onChange={(e) => updateForm("age", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter" placeholder="Ej. 35" />
                   </div>
-                  <p className="font-inter font-light text-[#2C332B]/80 text-sm leading-relaxed">
-                    Tus niveles de glucosa (95 mg/dL) están dentro del rango normal. Sin embargo, tu historial familiar y la presión arterial sugieren que mantener un peso saludable y mejorar la actividad cardiovascular reducirá drásticamente tu riesgo futuro de desarrollar resistencia a la insulina.
-                  </p>
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Peso (kg)</label>
+                    <input type="number" value={formData.weight} onChange={(e) => updateForm("weight", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter" placeholder="Ej. 70" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Altura (cm)</label>
+                  <input type="number" value={formData.height} onChange={(e) => updateForm("height", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter" placeholder="Ej. 175" />
+                </div>
+                
+                <button onClick={() => setStep(2)} disabled={!formData.age || !formData.weight || !formData.height} className="w-full mt-8 bg-[#2C332B] text-white py-4 rounded-full font-inter font-light hover:bg-[#6B8E7D] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  Continuar
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* PASO 2: Estilo de Vida y Genética */}
+          {step === 2 && (
+            <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+              <h2 className="text-3xl font-playfair text-[#2C332B] mb-2 tracking-tight">Estilo de Vida</h2>
+              <p className="text-[#2C332B]/60 font-inter font-light text-sm mb-8">Indicadores de riesgo cardiovascular y genético.</p>
+              
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Cintura (cm) - Opcional</label>
+                  <input type="number" value={formData.waist} onChange={(e) => updateForm("waist", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter" placeholder="Mide a la altura del ombligo" />
+                </div>
+                
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Actividad Física</label>
+                  <select value={formData.physicalActivity} onChange={(e) => updateForm("physicalActivity", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter text-[#2C332B]">
+                    <option value="">Selecciona una opción</option>
+                    <option value="Sedentario">Sedentario (Poco o ningún ejercicio)</option>
+                    <option value="Moderado">Moderado (Ejercicio 2-3 veces por semana)</option>
+                    <option value="Activo">Activo (Ejercicio 4+ veces por semana)</option>
+                  </select>
                 </div>
 
-                <div>
-                  <h4 className="font-inter font-medium text-sm uppercase tracking-widest text-[#2C332B]/50 mb-4">Plan de Acción Recomendado</h4>
-                  <ul className="space-y-3">
-                    <li className="flex items-center gap-3 text-sm font-inter font-light text-[#2C332B]/80">
-                      <span className="w-2 h-2 rounded-full bg-[#6B8E7D]"></span> Caminar 30 minutos al día.
-                    </li>
-                    <li className="flex items-center gap-3 text-sm font-inter font-light text-[#2C332B]/80">
-                      <span className="w-2 h-2 rounded-full bg-[#6B8E7D]"></span> Reducir carbohidratos refinados en cenas.
-                    </li>
-                    <li className="flex items-center gap-3 text-sm font-inter font-light text-[#2C332B]/80">
-                      <span className="w-2 h-2 rounded-full bg-[#6B8E7D]"></span> Monitoreo preventivo en 6 meses.
-                    </li>
-                  </ul>
+                <div className="p-4 bg-white/50 border border-white rounded-2xl flex items-center justify-between cursor-pointer" onClick={() => updateForm("familyHistory", !formData.familyHistory)}>
+                  <span className="text-sm font-inter text-[#2C332B]">¿Familiares directos con Diabetes?</span>
+                  <div className={`w-12 h-6 rounded-full transition-colors relative ${formData.familyHistory ? 'bg-[#6B8E7D]' : 'bg-[#2C332B]/20'}`}>
+                    <motion.div className="w-4 h-4 bg-white rounded-full absolute top-1" animate={{ left: formData.familyHistory ? '26px' : '4px' }} />
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mt-8">
+                  <button onClick={() => setStep(1)} className="w-1/3 py-4 rounded-full font-inter font-light text-[#2C332B] hover:bg-black/5 transition-colors border border-black/5">Atrás</button>
+                  <button onClick={() => setStep(3)} disabled={!formData.physicalActivity} className="w-2/3 bg-[#2C332B] text-white py-4 rounded-full font-inter font-light hover:bg-[#6B8E7D] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Continuar</button>
                 </div>
               </div>
+            </motion.div>
+          )}
 
-            </div>
+          {/* PASO 3: Clínicos Opcionales */}
+          {step === 3 && (
+            <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+              <h2 className="text-3xl font-playfair text-[#2C332B] mb-2 tracking-tight">Datos Clínicos</h2>
+              <p className="text-[#2C332B]/60 font-inter font-light text-sm mb-8">Si tienes análisis recientes, inclúyelos. Si no, déjalos en blanco.</p>
+              
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Glucosa en ayunas (mg/dL)</label>
+                  <input type="number" value={formData.fastingGlucose} onChange={(e) => updateForm("fastingGlucose", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter" placeholder="Ej. 95" />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Presión Arterial Sistólica (mmHg)</label>
+                  <input type="number" value={formData.systolicPressure} onChange={(e) => updateForm("systolicPressure", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter" placeholder="Ej. 120" />
+                </div>
 
-            {/* Footer del Resultado */}
-            <div className="pt-8 mt-4 border-t border-[#2C332B]/10 flex flex-col sm:flex-row justify-between items-center gap-4">
-              <p className="text-xs font-inter font-light text-[#2C332B]/50 max-w-md text-center sm:text-left">
-                *Este es un análisis predictivo. Te recomendamos consultar con un profesional médico para un diagnóstico oficial.
-              </p>
-              <Link href="/login">
-                <button className="bg-[#2C332B] text-white px-6 py-3 rounded-full font-inter font-light hover:bg-[#6B8E7D] transition shadow-md whitespace-nowrap">
-                  Guardar mi Historial
-                </button>
-              </Link>
-            </div>
+                <div className="flex gap-4 mt-8">
+                  <button onClick={() => setStep(2)} className="w-1/3 py-4 rounded-full font-inter font-light text-[#2C332B] hover:bg-black/5 transition-colors border border-black/5">Atrás</button>
+                  <button onClick={analyzeData} className="w-2/3 bg-[#6B8E7D] text-white py-4 rounded-full font-inter font-medium tracking-wide hover:bg-[#2C332B] shadow-md transition-all">
+                    Generar Diagnóstico IA
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
-          </motion.div>
-        )}
+          {/* PASO 4: Resultados / Loading */}
+          {step === 4 && (
+            <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-8">
+              {isLoading ? (
+                <div className="flex flex-col items-center">
+                  <div className="w-16 h-16 border-4 border-[#6B8E7D]/20 border-t-[#6B8E7D] rounded-full animate-spin mb-6" />
+                  <h3 className="font-playfair text-2xl text-[#2C332B] mb-2">Gemini está analizando...</h3>
+                  <p className="font-inter text-sm text-[#2C332B]/60">Evaluando biomarcadores y calculando riesgos.</p>
+                </div>
+              ) : result?.error ? (
+                <div className="text-red-500">
+                  <p>{result.error}</p>
+                  <button onClick={() => setStep(1)} className="mt-4 text-[#6B8E7D] underline">Intentar de nuevo</button>
+                </div>
+              ) : (
+                <div className="text-left">
+                  {/* Tarjeta de Nivel de Riesgo */}
+                  <div className={`p-6 rounded-3xl mb-6 text-center ${result.riskLevel === 'Alto' ? 'bg-red-50 text-red-800' : result.riskLevel === 'Moderado' ? 'bg-yellow-50 text-yellow-800' : 'bg-green-50 text-green-800'}`}>
+                    <span className="block text-xs uppercase tracking-widest opacity-60 mb-2">Nivel de Riesgo</span>
+                    <h3 className="text-4xl font-playfair font-bold">{result.riskLevel}</h3>
+                  </div>
 
-      </motion.div>
+                  <h4 className="font-playfair text-xl mb-3 text-[#2C332B]">Análisis de la Inteligencia Artificial</h4>
+                  <p className="font-inter text-sm text-[#2C332B]/80 leading-relaxed mb-8 p-6 bg-white/50 border border-white rounded-3xl">
+                    {result.aiAnalysis}
+                  </p>
+
+                  <h4 className="font-playfair text-xl mb-3 text-[#2C332B]">Plan de Acción</h4>
+                  <ul className="space-y-3 mb-8">
+                    {result.recommendedPlan?.split(';').filter((p:string) => p.trim() !== '').map((point: string, i: number) => (
+                      <li key={i} className="flex gap-3 text-sm font-inter text-[#2C332B]/80 items-start">
+                        <div className="w-5 h-5 rounded-full bg-[#6B8E7D]/20 text-[#6B8E7D] flex items-center justify-center flex-shrink-0 mt-0.5 text-xs">✓</div>
+                        {point.trim()}
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* Acciones Finales */}
+                  <div className="flex gap-4">
+                    <button onClick={() => setStep(1)} className="w-1/2 py-4 rounded-full font-inter font-light text-[#2C332B] hover:bg-black/5 transition-colors border border-black/5">Reevaluar</button>
+                    <Link href={session ? "/dashboard" : "/login"} className="w-1/2 text-center bg-[#2C332B] text-white py-4 rounded-full font-inter font-light hover:bg-[#6B8E7D] transition-colors">
+                      {session ? "Ir a mi panel" : "Guardar mis datos"}
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

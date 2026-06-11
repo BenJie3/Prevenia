@@ -7,7 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 1. Tabla intermedia para los inicios de sesión sociales (Google)
 model Account {
   id                 String  @id @default(cuid())
   userId             String
@@ -24,7 +23,6 @@ model Account {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Auditoría y Borrado Lógico
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   deletedAt          DateTime? 
@@ -32,48 +30,50 @@ model Account {
   @@unique([provider, providerAccountId])
 }
 
-// 2. Tabla de Usuarios (Pacientes y Administradores)
 model User {
   id            String    @id @default(cuid())
   name          String?
   email         String?   @unique
   emailVerified DateTime?
   image         String?   
-  password      String?   // Es opcional porque los de Google no tienen contraseña local
+  password      String?   
   role          String    @default("PACIENTE") 
   
-  // Datos médicos base editables
-  age           Int?
-  weight        Float?
+  // Datos médicos 
+  age              Int?
+  weight           Float?
+  height           Float?    // NUEVO: Altura en cm
+  waist            Float?    // NUEVO: Cintura en cm
+  physicalActivity String?   // NUEVO: Ej. "Sedentario"
   
   accounts      Account[] 
   diagnostics   Diagnostic[]
 
-  // Auditoría y Borrado Lógico obligatorios
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime? 
 }
 
-// 3. Tabla de Diagnósticos Preventivos de la IA
 model Diagnostic {
   id               String    @id @default(cuid())
-  userId           String
-  user             User      @relation(fields: [userId], references: [id])
+  userId           String?   // Nota: Le puse "?" por si un usuario sin registro hace el test
+  user             User?     @relation(fields: [userId], references: [id])
   
-  // Datos capturados en el momento del test
+  // Datos capturados
   age              Int
   weight           Float
+  height           Float?    // NUEVO
+  waist            Float?    // NUEVO
+  physicalActivity String?   // NUEVO
   familyHistory    Boolean
   fastingGlucose   Float?
   systolicPressure Float?
   
-  // Respuestas de la IA
+  // Resultados IA
   riskLevel        String   
   aiAnalysis       String?  
   recommendedPlan  String?  
 
-  // Auditoría y Borrado Lógico
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime? 

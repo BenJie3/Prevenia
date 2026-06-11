@@ -1,7 +1,17 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function Footer() {
+    const pathname = usePathname();
+    // 🪄 Si la ruta empieza con /admin, el componente se desvanece por completo
+  if (pathname.startsWith("/admin")) {
+    return null;
+  }
   return (
+    // <footer className="bg-white border-t border-[#2C332B]/5 py-8 mt-auto">
     <footer className="w-full bg-[#EAE2D0]/40 border-t border-[#2C332B]/10 pt-16 pb-8 mt-10 relative z-30">
         <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-12 text-sm">
             
