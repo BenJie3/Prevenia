@@ -2,232 +2,333 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
+import { z } from "zod"; // 🛡️ EL BLINDAJE DE SEGURIDAD
+
+// ==========================================
+// 🛡️ REGLAS ESTRICTAS DE ZOD (Evita Inyecciones y Errores)
+// ==========================================
+const step1Schema = z.object({
+  age: z.number({ invalid_type_error: "Debe ser un número válido" }).min(18, "Debes ser mayor de 18 años").max(120, "Edad irreal"),
+  weight: z.number({ invalid_type_error: "Debe ser un número válido" }).min(30, "Peso mínimo 30kg").max(300, "Peso irreal"),
+  height: z.number({ invalid_type_error: "Debe ser un número válido" }).min(100, "Altura mínima 100cm").max(250, "Altura irreal"),
+  waist: z.number().min(40).max(200).optional().or(z.literal('')),
+});
+
+const step3Schema = z.object({
+  fastingGlucose: z.number().min(40).max(500).optional().or(z.literal('')),
+  systolicPressure: z.number().min(70).max(250).optional().or(z.literal('')),
+});
 
 export default function DiagnosticWizard() {
-  const { data: session } = useSession(); // Para saber si hay alguien logueado
+  const { data: session } = useSession();
   const [step, setStep] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-  // 1. EL ESTADO CON LOS NUEVOS DATOS MÉDICOS
+  // ESTADOS DEL FORMULARIO (Agregados los 3 nuevos campos)
   const [formData, setFormData] = useState({
-    age: "",
-    weight: "",
-    height: "",
-    waist: "",
-    physicalActivity: "",
+    age: "", weight: "", height: "", waist: "",
+    physicalActivity: "Moderada",
     familyHistory: false,
-    fastingGlucose: "",
-    systolicPressure: "",
+    healthyDiet: true,              // 🍎 NUEVO
+    previousHighGlucose: false,     // 🩸 NUEVO
+    bloodPressureMedication: false, // 💊 NUEVO
+    fastingGlucose: "", systolicPressure: ""
   });
 
-  const updateForm = (field: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  // MANEJO SEGURO DE INPUTS (Solo permite números y limpia el texto)
+  const handleNumberInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    // Si no es un número y no está vacío, no lo deja escribir
+    if (value !== "" && !/^\d*\.?\d*$/.test(value)) return;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    // Borramos el error si existía
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: "" }));
   };
 
-  // 2. FUNCIÓN PARA ENVIAR A LA IA
-  const analyzeData = async () => {
-    setIsLoading(true);
-    setStep(4); // Movemos a la pantalla de carga/resultado
+  // NAVEGACIÓN ENTRE PASOS CON VALIDACIÓN ZOD 🛡️
+  const nextStep = () => {
+    if (step === 1) {
+      const parsedData = {
+        age: Number(formData.age), weight: Number(formData.weight),
+        height: Number(formData.height), waist: formData.waist ? Number(formData.waist) : ''
+      };
+      
+      const validation = step1Schema.safeParse(parsedData);
+      if (!validation.success) {
+        const newErrors: any = {};
+        validation.error.issues.forEach(issue => { newErrors[issue.path[0]] = issue.message; });
+        setErrors(newErrors);
+        return; // El Cadenero Zod bloquea el avance
+      }
+    }
+    setStep(prev => prev + 1);
+    setErrors({});
+  };
+
+  const prevStep = () => {
+    setStep(prev => prev - 1);
+    setErrors({});
+  };
+
+  // ENVIAR AL MOTOR RAG (GEMINI)
+  const handleSubmit = async () => {
+    // Validamos el último paso antes de enviar
+    const parsedStep3 = {
+      fastingGlucose: formData.fastingGlucose ? Number(formData.fastingGlucose) : '',
+      systolicPressure: formData.systolicPressure ? Number(formData.systolicPressure) : '',
+    };
+    
+    const validation = step3Schema.safeParse(parsedStep3);
+    if (!validation.success) {
+      const newErrors: any = {};
+      validation.error.issues.forEach(issue => { newErrors[issue.path[0]] = issue.message; });
+      setErrors(newErrors);
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setStep(4);
 
     try {
-      const response = await fetch("/api/diagnostic", {
+      const payload = {
+        ...formData,
+        userId: session?.user ? (session.user as any).id : null
+      };
+
+      const res = await fetch("/api/diagnostic", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...formData,
-          userId: session?.user?.id || null, // Si hay sesión, mandamos el ID para guardarlo
-        }),
+        body: JSON.stringify(payload)
       });
-
-      const data = await response.json();
+      const data = await res.json();
       
       if (data.success) {
         setResult(data.diagnostic);
+        setStep(5);
       } else {
-        console.error(data.error);
-        setResult({ error: "Hubo un error al procesar el análisis." });
+        alert(data.error);
+        setStep(3); // Regresa en caso de error
       }
-    } catch (error) {
-      setResult({ error: "Error de conexión." });
+    } catch (e) {
+      alert("Error de conexión. Intente nuevamente.");
+      setStep(3);
     } finally {
-      setIsLoading(false);
+      setIsAnalyzing(false);
     }
   };
 
+  // COMPONENTES UI AUXILIARES
+  const InputError = ({ msg }: { msg?: string }) => msg ? <p className="text-red-500 text-xs mt-1 animate-pulse">{msg}</p> : null;
+
   return (
-    <div className="min-h-screen bg-[#F8F6F0] pt-32 pb-20 px-4 relative overflow-hidden flex flex-col items-center">
+    <div className="min-h-screen bg-[#F8F6F0] pt-24 px-4 pb-12 flex flex-col items-center">
       
-      {/* Blobs de fondo */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#6B8E7D]/10 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-[30rem] h-[30rem] bg-[#EFECE5] rounded-full blur-[100px] pointer-events-none" />
-
-      {/* Contenedor Principal Acrílico */}
-      <div className="w-full max-w-2xl bg-white/70 backdrop-blur-xl rounded-[3rem] shadow-sm border border-white p-8 md:p-14 relative z-10">
-        
-        {/* Barra de Progreso */}
-        {step < 4 && (
-          <div className="mb-10">
-            <div className="flex justify-between text-[10px] uppercase tracking-widest text-[#2C332B]/40 mb-3 font-medium">
-              <span>Paso {step} de 3</span>
-              <span>Evaluación Metabólica</span>
-            </div>
-            <div className="w-full h-1.5 bg-[#2C332B]/5 rounded-full overflow-hidden">
-              <motion.div 
-                className="h-full bg-[#6B8E7D]"
-                initial={{ width: `${((step - 1) / 3) * 100}%` }}
-                animate={{ width: `${(step / 3) * 100}%` }}
-                transition={{ duration: 0.5, ease: "easeInOut" }}
-              />
-            </div>
+      {/* Título Principal */}
+      {step < 4 && (
+        <div className="text-center mb-8">
+          <h1 className="text-3xl md:text-4xl font-playfair text-[#2C332B] mb-2">Evaluación Clínica Asistida</h1>
+          <p className="text-[#2C332B]/60 font-inter font-light">Paso {step} de 3</p>
+          <div className="flex justify-center gap-2 mt-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className={`h-1.5 w-12 rounded-full transition-all duration-500 ${step >= i ? "bg-[#6B8E7D]" : "bg-[#6B8E7D]/20"}`} />
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
+      {/* Contenedor del Wizard */}
+      <div className="w-full max-w-2xl bg-white p-8 md:p-12 rounded-[3rem] shadow-sm border border-white relative overflow-hidden">
+        
         <AnimatePresence mode="wait">
-          
-          {/* PASO 1: Biometría Básica */}
+          {/* PASO 1: MÉTRICAS FÍSICAS */}
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-              <h2 className="text-3xl font-playfair text-[#2C332B] mb-2 tracking-tight">Biometría Básica</h2>
-              <p className="text-[#2C332B]/60 font-inter font-light text-sm mb-8">Datos esenciales para calcular tu índice de masa corporal.</p>
-              
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Edad (años)</label>
-                    <input type="number" value={formData.age} onChange={(e) => updateForm("age", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter" placeholder="Ej. 35" />
-                  </div>
-                  <div>
-                    <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Peso (kg)</label>
-                    <input type="number" value={formData.weight} onChange={(e) => updateForm("weight", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter" placeholder="Ej. 70" />
-                  </div>
+              <h2 className="text-2xl font-playfair text-[#2C332B] mb-6">Métricas Físicas</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-inter text-[#2C332B]/70 mb-2">Edad (años) *</label>
+                  <input type="text" inputMode="numeric" name="age" value={formData.age} onChange={handleNumberInput} placeholder="Ej. 45" className={`w-full bg-[#F8F6F0] p-4 rounded-2xl outline-none font-inter ${errors.age ? 'border border-red-500' : ''}`} />
+                  <InputError msg={errors.age} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Altura (cm)</label>
-                  <input type="number" value={formData.height} onChange={(e) => updateForm("height", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter" placeholder="Ej. 175" />
+                  <label className="block text-sm font-inter text-[#2C332B]/70 mb-2">Peso (kg) *</label>
+                  <input type="text" inputMode="numeric" name="weight" value={formData.weight} onChange={handleNumberInput} placeholder="Ej. 75" className={`w-full bg-[#F8F6F0] p-4 rounded-2xl outline-none font-inter ${errors.weight ? 'border border-red-500' : ''}`} />
+                  <InputError msg={errors.weight} />
                 </div>
-                
-                <button onClick={() => setStep(2)} disabled={!formData.age || !formData.weight || !formData.height} className="w-full mt-8 bg-[#2C332B] text-white py-4 rounded-full font-inter font-light hover:bg-[#6B8E7D] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                  Continuar
-                </button>
+                <div>
+                  <label className="block text-sm font-inter text-[#2C332B]/70 mb-2">Altura (cm) *</label>
+                  <input type="text" inputMode="numeric" name="height" value={formData.height} onChange={handleNumberInput} placeholder="Ej. 170" className={`w-full bg-[#F8F6F0] p-4 rounded-2xl outline-none font-inter ${errors.height ? 'border border-red-500' : ''}`} />
+                  <InputError msg={errors.height} />
+                </div>
+                <div>
+                  <label className="block text-sm font-inter text-[#2C332B]/70 mb-2">Cintura (cm) <span className="text-xs opacity-50">(Opcional)</span></label>
+                  <input type="text" inputMode="numeric" name="waist" value={formData.waist} onChange={handleNumberInput} placeholder="Ej. 90" className={`w-full bg-[#F8F6F0] p-4 rounded-2xl outline-none font-inter ${errors.waist ? 'border border-red-500' : ''}`} />
+                  <InputError msg={errors.waist} />
+                </div>
               </div>
             </motion.div>
           )}
 
-          {/* PASO 2: Estilo de Vida y Genética */}
+          {/* PASO 2: ESTILO DE VIDA E HISTORIAL (NUEVAS PREGUNTAS) */}
           {step === 2 && (
             <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-              <h2 className="text-3xl font-playfair text-[#2C332B] mb-2 tracking-tight">Estilo de Vida</h2>
-              <p className="text-[#2C332B]/60 font-inter font-light text-sm mb-8">Indicadores de riesgo cardiovascular y genético.</p>
+              <h2 className="text-2xl font-playfair text-[#2C332B] mb-6">Hábitos e Historial</h2>
               
               <div className="space-y-6">
                 <div>
-                  <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Cintura (cm) - Opcional</label>
-                  <input type="number" value={formData.waist} onChange={(e) => updateForm("waist", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter" placeholder="Mide a la altura del ombligo" />
-                </div>
-                
-                <div>
-                  <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Actividad Física</label>
-                  <select value={formData.physicalActivity} onChange={(e) => updateForm("physicalActivity", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter text-[#2C332B]">
-                    <option value="">Selecciona una opción</option>
-                    <option value="Sedentario">Sedentario (Poco o ningún ejercicio)</option>
-                    <option value="Moderado">Moderado (Ejercicio 2-3 veces por semana)</option>
-                    <option value="Activo">Activo (Ejercicio 4+ veces por semana)</option>
-                  </select>
-                </div>
-
-                <div className="p-4 bg-white/50 border border-white rounded-2xl flex items-center justify-between cursor-pointer" onClick={() => updateForm("familyHistory", !formData.familyHistory)}>
-                  <span className="text-sm font-inter text-[#2C332B]">¿Familiares directos con Diabetes?</span>
-                  <div className={`w-12 h-6 rounded-full transition-colors relative ${formData.familyHistory ? 'bg-[#6B8E7D]' : 'bg-[#2C332B]/20'}`}>
-                    <motion.div className="w-4 h-4 bg-white rounded-full absolute top-1" animate={{ left: formData.familyHistory ? '26px' : '4px' }} />
+                  <label className="block text-sm font-inter text-[#2C332B]/70 mb-3">Nivel de Actividad Física</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {["Baja", "Moderada", "Alta"].map(level => (
+                      <button key={level} onClick={() => setFormData({ ...formData, physicalActivity: level })} className={`py-3 rounded-2xl text-sm font-inter transition-all ${formData.physicalActivity === level ? 'bg-[#6B8E7D] text-white shadow-md' : 'bg-[#F8F6F0] text-[#2C332B]/60 hover:bg-[#EAE2D0]'}`}>
+                        {level}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="flex gap-4 mt-8">
-                  <button onClick={() => setStep(1)} className="w-1/3 py-4 rounded-full font-inter font-light text-[#2C332B] hover:bg-black/5 transition-colors border border-black/5">Atrás</button>
-                  <button onClick={() => setStep(3)} disabled={!formData.physicalActivity} className="w-2/3 bg-[#2C332B] text-white py-4 rounded-full font-inter font-light hover:bg-[#6B8E7D] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Continuar</button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* PASO 3: Clínicos Opcionales */}
-          {step === 3 && (
-            <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-              <h2 className="text-3xl font-playfair text-[#2C332B] mb-2 tracking-tight">Datos Clínicos</h2>
-              <p className="text-[#2C332B]/60 font-inter font-light text-sm mb-8">Si tienes análisis recientes, inclúyelos. Si no, déjalos en blanco.</p>
-              
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Glucosa en ayunas (mg/dL)</label>
-                  <input type="number" value={formData.fastingGlucose} onChange={(e) => updateForm("fastingGlucose", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter" placeholder="Ej. 95" />
-                </div>
-                <div>
-                  <label className="block text-xs uppercase tracking-widest text-[#2C332B]/60 mb-2 ml-2">Presión Arterial Sistólica (mmHg)</label>
-                  <input type="number" value={formData.systolicPressure} onChange={(e) => updateForm("systolicPressure", e.target.value)} className="w-full p-4 bg-white/50 border border-white rounded-2xl focus:ring-1 focus:ring-[#6B8E7D] outline-none transition text-sm font-inter" placeholder="Ej. 120" />
+                {/* 🍎 PREGUNTA NUEVA 1 */}
+                <div className="bg-[#F8F6F0] p-5 rounded-3xl flex items-center justify-between">
+                  <div>
+                    <h4 className="font-inter text-[#2C332B] text-sm">Dieta Saludable</h4>
+                    <p className="text-xs text-[#2C332B]/60 mt-1">¿Comes verduras o frutas todos los días?</p>
+                  </div>
+                  <button onClick={() => setFormData({ ...formData, healthyDiet: !formData.healthyDiet })} className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${formData.healthyDiet ? 'bg-[#6B8E7D]' : 'bg-gray-300'}`}>
+                    <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 ${formData.healthyDiet ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </button>
                 </div>
 
-                <div className="flex gap-4 mt-8">
-                  <button onClick={() => setStep(2)} className="w-1/3 py-4 rounded-full font-inter font-light text-[#2C332B] hover:bg-black/5 transition-colors border border-black/5">Atrás</button>
-                  <button onClick={analyzeData} className="w-2/3 bg-[#6B8E7D] text-white py-4 rounded-full font-inter font-medium tracking-wide hover:bg-[#2C332B] shadow-md transition-all">
-                    Generar Diagnóstico IA
+                <div className="bg-[#F8F6F0] p-5 rounded-3xl flex items-center justify-between">
+                  <div>
+                    <h4 className="font-inter text-[#2C332B] text-sm">Historial Familiar</h4>
+                    <p className="text-xs text-[#2C332B]/60 mt-1">¿Padres o abuelos con diabetes?</p>
+                  </div>
+                  <button onClick={() => setFormData({ ...formData, familyHistory: !formData.familyHistory })} className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${formData.familyHistory ? 'bg-[#6B8E7D]' : 'bg-gray-300'}`}>
+                    <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 ${formData.familyHistory ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+
+                {/* 🩸 PREGUNTA NUEVA 2 */}
+                <div className="bg-[#F8F6F0] p-5 rounded-3xl flex items-center justify-between">
+                  <div>
+                    <h4 className="font-inter text-[#2C332B] text-sm">Glucosa Alta Previa</h4>
+                    <p className="text-xs text-[#2C332B]/60 mt-1 max-w-[200px]">¿Alguna vez te han detectado glucosa alta (ej. embarazo, exámenes previos)?</p>
+                  </div>
+                  <button onClick={() => setFormData({ ...formData, previousHighGlucose: !formData.previousHighGlucose })} className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${formData.previousHighGlucose ? 'bg-[#6B8E7D]' : 'bg-gray-300'}`}>
+                    <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 ${formData.previousHighGlucose ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
                 </div>
               </div>
             </motion.div>
           )}
 
-          {/* PASO 4: Resultados / Loading */}
+          {/* PASO 3: DATOS CLÍNICOS (OPCIONALES + 💊 NUEVO) */}
+          {step === 3 && (
+            <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+              <h2 className="text-2xl font-playfair text-[#2C332B] mb-2">Datos Clínicos</h2>
+              <p className="text-xs text-[#2C332B]/50 font-inter mb-6">Si no conoces estos datos, puedes dejarlos en blanco.</p>
+              
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-inter text-[#2C332B]/70 mb-2">Glucosa en Ayunas (mg/dL)</label>
+                    <input type="text" inputMode="numeric" name="fastingGlucose" value={formData.fastingGlucose} onChange={handleNumberInput} placeholder="Ej. 95" className={`w-full bg-[#F8F6F0] p-4 rounded-2xl outline-none font-inter ${errors.fastingGlucose ? 'border border-red-500' : ''}`} />
+                    <InputError msg={errors.fastingGlucose} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-inter text-[#2C332B]/70 mb-2">Presión Sistólica (mmHg)</label>
+                    <input type="text" inputMode="numeric" name="systolicPressure" value={formData.systolicPressure} onChange={handleNumberInput} placeholder="Ej. 120" className={`w-full bg-[#F8F6F0] p-4 rounded-2xl outline-none font-inter ${errors.systolicPressure ? 'border border-red-500' : ''}`} />
+                    <InputError msg={errors.systolicPressure} />
+                  </div>
+                </div>
+
+                {/* 💊 PREGUNTA NUEVA 3 */}
+                <div className="bg-[#F8F6F0] p-5 rounded-3xl flex items-center justify-between">
+                  <div>
+                    <h4 className="font-inter text-[#2C332B] text-sm">Medicación</h4>
+                    <p className="text-xs text-[#2C332B]/60 mt-1">¿Tomas medicamento para la presión arterial?</p>
+                  </div>
+                  <button onClick={() => setFormData({ ...formData, bloodPressureMedication: !formData.bloodPressureMedication })} className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${formData.bloodPressureMedication ? 'bg-[#6B8E7D]' : 'bg-gray-300'}`}>
+                    <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 ${formData.bloodPressureMedication ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* PASO 4: PANTALLA DE CARGA IA */}
           {step === 4 && (
-            <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-8">
-              {isLoading ? (
-                <div className="flex flex-col items-center">
-                  <div className="w-16 h-16 border-4 border-[#6B8E7D]/20 border-t-[#6B8E7D] rounded-full animate-spin mb-6" />
-                  <h3 className="font-playfair text-2xl text-[#2C332B] mb-2">Gemini está analizando...</h3>
-                  <p className="font-inter text-sm text-[#2C332B]/60">Evaluando biomarcadores y calculando riesgos.</p>
-                </div>
-              ) : result?.error ? (
-                <div className="text-red-500">
-                  <p>{result.error}</p>
-                  <button onClick={() => setStep(1)} className="mt-4 text-[#6B8E7D] underline">Intentar de nuevo</button>
-                </div>
-              ) : (
-                <div className="text-left">
-                  {/* Tarjeta de Nivel de Riesgo */}
-                  <div className={`p-6 rounded-3xl mb-6 text-center ${result.riskLevel === 'Alto' ? 'bg-red-50 text-red-800' : result.riskLevel === 'Moderado' ? 'bg-yellow-50 text-yellow-800' : 'bg-green-50 text-green-800'}`}>
-                    <span className="block text-xs uppercase tracking-widest opacity-60 mb-2">Nivel de Riesgo</span>
-                    <h3 className="text-4xl font-playfair font-bold">{result.riskLevel}</h3>
-                  </div>
+            <motion.div key="step4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-12">
+              <div className="w-24 h-24 relative mb-8">
+                <div className="absolute inset-0 border-4 border-[#6B8E7D]/20 rounded-full" />
+                <div className="absolute inset-0 border-4 border-[#6B8E7D] border-t-transparent rounded-full animate-spin" />
+                <svg className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 text-[#6B8E7D] animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+              </div>
+              <h2 className="text-2xl font-playfair text-[#2C332B] mb-2 text-center">Gemini está analizando...</h2>
+              <p className="text-sm text-[#2C332B]/50 font-inter text-center animate-pulse">Cruzando biomarcadores con guías médicas oficiales</p>
+            </motion.div>
+          )}
 
-                  <h4 className="font-playfair text-xl mb-3 text-[#2C332B]">Análisis de la Inteligencia Artificial</h4>
-                  <p className="font-inter text-sm text-[#2C332B]/80 leading-relaxed mb-8 p-6 bg-white/50 border border-white rounded-3xl">
-                    {result.aiAnalysis}
-                  </p>
+          {/* PASO 5: RESULTADO FINAL */}
+          {step === 5 && result && (
+            <motion.div key="step5" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+              <div className="text-center mb-8">
+                <h2 className="text-3xl font-playfair text-[#2C332B] mb-2">Tu Evaluación</h2>
+                <div className={`inline-block px-6 py-2 rounded-full text-sm font-medium uppercase tracking-widest mt-4 ${
+                  result.riskLevel === 'Alto' ? 'bg-red-100 text-red-700' :
+                  result.riskLevel === 'Moderado' ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-green-100 text-green-700'
+                }`}>Riesgo {result.riskLevel}</div>
+              </div>
 
-                  <h4 className="font-playfair text-xl mb-3 text-[#2C332B]">Plan de Acción</h4>
-                  <ul className="space-y-3 mb-8">
-                    {result.recommendedPlan?.split(';').filter((p:string) => p.trim() !== '').map((point: string, i: number) => (
-                      <li key={i} className="flex gap-3 text-sm font-inter text-[#2C332B]/80 items-start">
-                        <div className="w-5 h-5 rounded-full bg-[#6B8E7D]/20 text-[#6B8E7D] flex items-center justify-center flex-shrink-0 mt-0.5 text-xs">✓</div>
-                        {point.trim()}
-                      </li>
-                    ))}
-                  </ul>
+              <div className="bg-[#F8F6F0] p-6 rounded-3xl mb-6">
+                <h4 className="font-playfair text-[#2C332B] text-lg mb-3">Análisis Clínico</h4>
+                <p className="text-[#2C332B]/80 font-inter font-light text-sm leading-relaxed">{result.aiAnalysis}</p>
+              </div>
 
-                  {/* Acciones Finales */}
-                  <div className="flex gap-4">
-                    <button onClick={() => setStep(1)} className="w-1/2 py-4 rounded-full font-inter font-light text-[#2C332B] hover:bg-black/5 transition-colors border border-black/5">Reevaluar</button>
-                    <Link href={session ? "/dashboard" : "/login"} className="w-1/2 text-center bg-[#2C332B] text-white py-4 rounded-full font-inter font-light hover:bg-[#6B8E7D] transition-colors">
-                      {session ? "Ir a mi panel" : "Guardar mis datos"}
-                    </Link>
-                  </div>
-                </div>
-              )}
+              <div className="bg-[#EFECE5] p-6 rounded-3xl mb-8">
+                <h4 className="font-playfair text-[#2C332B] text-lg mb-3">Plan de Acción Recomendado</h4>
+                <ul className="space-y-3">
+                  {result.recommendedPlan.split(';').map((action: string, idx: number) => (
+                    <li key={idx} className="flex gap-3 text-sm font-inter text-[#2C332B]/80 items-start">
+                      <span className="text-[#6B8E7D] mt-0.5">✦</span> <span>{action.trim()}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <Link href={session ? "/dashboard" : "/"} className="w-full">
+                  <button className="w-full py-4 bg-[#2C332B] text-white rounded-full font-inter font-light text-sm hover:bg-[#6B8E7D] transition-all shadow-md">
+                    {session ? "Ir a mi Panel Médico" : "Finalizar y Volver al Inicio"}
+                  </button>
+                </Link>
+                {!session && (
+                  <p className="text-xs text-center text-[#2C332B]/50 font-inter">Crea una cuenta la próxima vez para guardar tu historial histórico.</p>
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* CONTROLES DE NAVEGACIÓN */}
+        {step < 4 && (
+          <div className="mt-10 flex items-center justify-between border-t border-[#2C332B]/5 pt-6">
+            {step > 1 ? (
+              <button onClick={prevStep} className="text-sm font-inter text-[#2C332B]/50 hover:text-[#2C332B] transition">Atrás</button>
+            ) : <div />}
+            
+            {step < 3 ? (
+              <button onClick={nextStep} className="px-8 py-3 bg-[#2C332B] text-white rounded-full font-inter font-light text-sm hover:bg-[#6B8E7D] transition-all shadow-md">Siguiente</button>
+            ) : (
+              <button onClick={handleSubmit} className="px-8 py-3 bg-[#6B8E7D] text-white rounded-full font-inter font-medium text-sm hover:bg-[#4A6357] transition-all shadow-md">Analizar con IA</button>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );

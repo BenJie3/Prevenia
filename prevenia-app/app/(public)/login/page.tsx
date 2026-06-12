@@ -1,21 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { signIn } from "next-auth/react"; // <- La magia de NextAuth
-import { useRouter } from "next/navigation"; // <- Para redirigir al Dashboard
+import { signIn, useSession } from "next-auth/react"; // 👈 Magia de NextAuth + Lectura de Sesión
+import { useRouter } from "next/navigation"; 
 
 export default function AuthPage() {
   const router = useRouter();
-  const [isLogin, setIsLogin] = useState(true);
+  const { data: session, status } = useSession(); // 👈 Leemos el estado del usuario
   
+  const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
+
+  // =====================================================================
+  // 🛡️ EL CADENERO INVERSO: Si ya hay sesión, te expulsa al Dashboard
+  // =====================================================================
+  useEffect(() => {
+    if (status === "authenticated") {
+      // Si es ADMIN lo mandamos a su panel, si es PACIENTE al suyo
+      if ((session?.user as any)?.role === "ADMIN") {
+        router.replace("/admin");
+      } else {
+        router.replace("/dashboard");
+      }
+    }
+  }, [status, session, router]);
 
   // 1. FUNCIÓN: Iniciar sesión con Google (Sirve tanto para registro como para login)
   const handleGoogleLogin = () => {
@@ -50,7 +65,7 @@ export default function AuthPage() {
     }
   };
 
-  // 3. FUNCIÓN: Registro tradicional (La que ya teníamos)
+  // 3. FUNCIÓN: Registro tradicional
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -77,8 +92,19 @@ export default function AuthPage() {
     }
   };
 
+  // 🛡️ PANTALLA DE CARGA DE SEGURIDAD
+  // Evitamos el "flashazo" visual del formulario mientras revisamos la sesión
+  if (status === "loading" || status === "authenticated") {
+    return (
+      <div className="min-h-screen bg-[#F8F6F0] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-[#6B8E7D]/20 border-t-[#6B8E7D] rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Si no está autenticado, renderiza el formulario normal
   return (
-    <div className="relative min-h-screen flex items-center justify-center pt-20 pb-20 px-4 overflow-hidden">
+    <div className="relative min-h-screen flex items-center justify-center pt-20 pb-20 px-4 overflow-hidden bg-[#F8F6F0]">
       <div className="absolute rounded-full filter blur-[80px] opacity-60 bg-[#EAE2D0] w-[30rem] h-[30rem] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
 
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, ease: "easeOut" }} className="w-full max-w-md bg-white/90 backdrop-blur-md p-10 sm:p-14 rounded-[3rem] shadow-sm border border-white relative z-10">
@@ -100,7 +126,7 @@ export default function AuthPage() {
           )}
         </AnimatePresence>
 
-        {/* BOTÓN DE GOOGLE (Aparece en ambas pestañas) */}
+        {/* BOTÓN DE GOOGLE */}
         <button 
           onClick={handleGoogleLogin} 
           disabled={isLoading}

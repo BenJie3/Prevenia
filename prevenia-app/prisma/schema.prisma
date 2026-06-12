@@ -55,26 +55,28 @@ model User {
 }
 
 model Diagnostic {
-  id               String    @id @default(cuid())
-  userId           String?   // Nota: Le puse "?" por si un usuario sin registro hace el test
-  user             User?     @relation(fields: [userId], references: [id])
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
   
-  // Datos capturados
   age              Int
   weight           Float
-  height           Float?    // NUEVO
-  waist            Float?    // NUEVO
-  physicalActivity String?   // NUEVO
+  height           Float
+  waist            Float?
+  physicalActivity String
   familyHistory    Boolean
   fastingGlucose   Float?
   systolicPressure Float?
-  
-  // Resultados IA
-  riskLevel        String   
-  aiAnalysis       String?  
-  recommendedPlan  String?  
 
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  deletedAt        DateTime? 
+  // CAMPOS NUEVOS PARA MEJORAR LA IA
+  healthyDiet             Boolean? @default(false)
+  previousHighGlucose     Boolean? @default(false)
+  bloodPressureMedication Boolean? @default(false)
+
+  riskLevel        String
+  aiAnalysis       String
+  recommendedPlan  String
+
+  createdAt        DateTime @default(now())
+  deletedAt        DateTime?
 }
