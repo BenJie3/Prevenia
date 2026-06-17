@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth/next"; //Importar sesión del servidor
 import fs from "fs/promises";
 import path from "path";
 
@@ -100,20 +101,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Error al procesar el diagnóstico clínico." }, { status: 500 });
   }
 }
-
 export async function GET(request: Request) {
   try {
+    const session = await getServerSession();
+    if (!session || !session.user || !session.user.email) {
+      return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+    }
+
+    // 🛡️ Buscamos al usuario por su email
+    const dbUser = await prisma.user.findUnique({
+      where: { email: session.user.email }
+    });
+
+    if (!dbUser) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
-    if (!userId) return NextResponse.json({ error: "No se proporcionó ID válido." }, { status: 400 });
+    const requestedUserId = searchParams.get("userId");
+    
+    if (!requestedUserId) {
+      return NextResponse.json({ error: "No se proporcionó ID válido." }, { status: 400 });
+    }
+
+    // 🛡️ PROTECCIÓN IDOR: Validamos el ID real de la BD
+    if (requestedUserId !== dbUser.id && dbUser.role !== "ADMIN") {
+      return NextResponse.json({ error: "Acceso denegado (403)." }, { status: 403 });
+    }
 
     const history = await prisma.diagnostic.findMany({
-      where: { userId: userId, deletedAt: null },
+      where: { userId: requestedUserId, deletedAt: null },
       orderBy: { createdAt: 'desc' }
     });
 
     return NextResponse.json({ success: true, history }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ error: "Error al obtener el historial." }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
   }
 }

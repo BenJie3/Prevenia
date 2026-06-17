@@ -4,6 +4,7 @@ import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
+import { sendWelcomeEmail } from "@/lib/mailer"; // 👈 1. Importamos nuestro cartero
 
 const handler = NextAuth({
   // Conecta NextAuth automáticamente para que escriba en nuestras tablas de Prisma
@@ -58,6 +59,15 @@ const handler = NextAuth({
       },
     }),
   ],
+
+  // 🚀 2. EVENTOS: El gatillo exclusivo para Google
+  events: {
+    async createUser(message) {
+      // Cuando NextAuth guarda un nuevo usuario de Google en Prisma, se activa esto:
+      await sendWelcomeEmail(message.user.email as string, message.user.name || "");
+    }
+  },
+
   callbacks: {
     // Guarda el ID y Rol en el Token interno
     async jwt({ token, user }) {

@@ -10,7 +10,7 @@ export default function Footer() {
     const { data: session } = useSession(); // 👈 Leemos el estado del usuario
     
     // 🪄 Si la ruta empieza con /admin, el componente se desvanece por completo
-    if (pathname.startsWith("/admin")) {
+    if (pathname.startsWith("/login")||pathname.startsWith("/admin") || pathname.startsWith("/register") || pathname.startsWith("/terms") || pathname.startsWith("/privacy") || pathname.startsWith("/reset-password") || pathname.startsWith("/forgot-password")) {
         return null;
     }
 
@@ -60,7 +60,7 @@ export default function Footer() {
                     <h4 className="font-playfair text-[#2C332B] text-lg mb-4">Clínico & Legal</h4>
                     <ul className="space-y-3 text-[#2C332B]/60 font-inter font-light">
                         <li><Link href="/privacy" className="hover:text-[#6B8E7D] transition">Políticas de Privacidad</Link></li>
-                        <li><Link href="#" className="hover:text-[#6B8E7D] transition">Términos Médicos</Link></li>
+                        <li><Link href="/terms" className="hover:text-[#6B8E7D] transition">Términos y Condiciones</Link></li>
                         <li><Link href="#" className="hover:text-[#6B8E7D] transition">Seguridad en IA</Link></li>
                     </ul>
                 </div>

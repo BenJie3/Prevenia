@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
+import { sendWelcomeEmail } from "@/lib/mailer"; // 👈 1. Importamos nuestro cartero
 
 // Al nombrar la función como POST, Next.js sabe que responderá a peticiones POST de formularios
 export async function POST(request: Request) {
@@ -42,7 +43,10 @@ export async function POST(request: Request) {
       },
     });
 
-    // 6. Devolver respuesta de éxito al Frontend (sin exponer la contraseña por seguridad)
+    // 🚀 6. GATILLO: Enviar correo de bienvenida silenciosamente en el fondo
+    sendWelcomeEmail(newUser.email, newUser.name || "");
+
+    // 7. Devolver respuesta de éxito al Frontend (sin exponer la contraseña por seguridad)
     return NextResponse.json(
       { message: "Usuario registrado con éxito", userId: newUser.id },
       { status: 201 }
