@@ -154,3 +154,60 @@ export const sendPasswordResetEmail = async (email: string, token: string, name:
     console.error("❌ Error enviando correo de recuperación:", error);
   }
 };
+
+export const sendActivationEmail = async (email: string, token: string, name: string) => {
+  try {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    const firstName = name ? name.split(' ')[0] : 'Paciente';
+    // 🛡️ El enlace para activar la cuenta
+    const activationLink = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/verify-email?token=${token}`;
+
+    const htmlTemplate = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+    <body style="font-family: Arial, sans-serif; background-color: #F8F6F0; margin: 0; padding: 40px 20px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-w-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 24px; border: 1px solid #EAE2D0; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
+        <tr>
+          <td style="background-color: #6B8E7D; text-align: center; padding: 40px 20px;">
+            <h1 style="color: #ffffff; margin: 0; font-family: 'Times New Roman', serif; font-size: 28px; letter-spacing: 1px;">Prevenia</h1>
+            <p style="color: rgba(255,255,255,0.8); margin: 10px 0 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 2px;">Verificación de Cuenta</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 40px 40px;">
+            <h2 style="color: #2C332B; margin-top: 0; font-family: 'Times New Roman', serif; font-size: 24px;">¡Hola, ${firstName}! 👋</h2>
+            <p style="color: #4A5568; line-height: 1.6; font-size: 15px;">Estás a un solo paso de unirte a Prevenia. Para asegurar la protección de tus datos médicos, necesitamos verificar que esta dirección de correo te pertenece.</p>
+            
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
+              <tr>
+                <td align="center">
+                  <a href="${activationLink}" style="background-color: #2C332B; color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 50px; font-size: 14px; font-weight: bold; display: inline-block;">Activar mi Cuenta</a>
+                </td>
+              </tr>
+            </table>
+            <p style="color: #A0AEC0; font-size: 12px; text-align: center;">Este enlace expirará en 24 horas.</p>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+    `;
+
+    await transporter.sendMail({
+      from: `"Prevenia Seguridad" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Activa tu cuenta de Prevenia 🌿",
+      html: htmlTemplate,
+    });
+  } catch (error) {
+    console.error("❌ Error enviando correo de activación:", error);
+  }
+};

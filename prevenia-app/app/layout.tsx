@@ -5,7 +5,8 @@ import Header from "@/components/header";
 import Footer from "@/components/Footer";
 import AuthProvider from "@/components/AuthProvider";
 import CookieBanner from "@/components/CookieBanner"; 
-import { Toaster } from "react-hot-toast"; // 👈 1. Importamos las notificaciones
+import { Toaster } from "react-hot-toast"; //  Importamos las notificaciones
+
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair" });

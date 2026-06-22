@@ -89,3 +89,12 @@ model VerificationToken {
 
   @@unique([identifier, token])
 }
+
+// 5. Modelo de Activación de Cuenta (Double Opt-In)
+model ActivationToken {
+  id         String   @id @default(cuid())
+  email      String
+  token      String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+}

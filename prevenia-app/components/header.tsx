@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react"; 
 import Image from "next/image";
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion"; // 👈 Añadido para el menú móvil
+import { motion, AnimatePresence } from "framer-motion"; // Añadido para el menú móvil
+
 
 export default function Header() {
   const pathname = usePathname();

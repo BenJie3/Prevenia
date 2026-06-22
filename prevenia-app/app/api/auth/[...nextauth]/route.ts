@@ -6,6 +6,35 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
 import { sendWelcomeEmail } from "@/lib/mailer"; // 👈 1. Importamos nuestro cartero
 
+// =======================================================
+// 🛡️ ESCUDO ANTI-FUERZA BRUTA: RATE LIMITING EN MEMORIA
+// =======================================================
+const loginRateLimitMap = new Map<string, { count: number, lastReset: number }>();
+const LOGIN_RATE_LIMIT_WINDOW = 60 * 1000; // Bloqueo de 1 minuto
+const MAX_LOGIN_ATTEMPTS = 5; // Solo 5 intentos fallidos permitidos
+
+function isLoginRateLimited(email: string) {
+  const now = Date.now();
+  const record = loginRateLimitMap.get(email);
+
+  if (!record) {
+    loginRateLimitMap.set(email, { count: 1, lastReset: now });
+    return false; // Primer intento
+  }
+
+  if (now - record.lastReset > LOGIN_RATE_LIMIT_WINDOW) {
+    loginRateLimitMap.set(email, { count: 1, lastReset: now });
+    return false; // Pasó el minuto de castigo, se reinicia
+  }
+
+  if (record.count >= MAX_LOGIN_ATTEMPTS) {
+    return true; // ¡HACKER BLOQUEADO!
+  }
+
+  record.count += 1;
+  return false;
+}
+
 const handler = NextAuth({
   // Conecta NextAuth automáticamente para que escriba en nuestras tablas de Prisma
   adapter: PrismaAdapter(prisma),
@@ -37,6 +66,11 @@ const handler = NextAuth({
           throw new Error("Por favor, rellena todos los campos.");
         }
         
+        // 🛡️ 1. APLICAR EL ESCUDO ANTES DE TOCAR LA BASE DE DATOS
+        if (isLoginRateLimited(credentials.email)) {
+          throw new Error("Demasiados intentos fallidos. Por favor, espera 1 minuto.");
+        }
+        
         // Buscamos al usuario en la base de datos
         const user = await prisma.user.findUnique({ where: { email: credentials.email } });
         
@@ -48,12 +82,20 @@ const handler = NextAuth({
         if (user.deletedAt !== null) {
           throw new Error("Esta cuenta ha sido dada de baja voluntariamente.");
         }
-        
+
+        // VALIDADOR DE DOUBLE OPT-IN
+        if (user.emailVerified === null) {
+          throw new Error("Por favor, verifica tu correo electrónico antes de entrar.");
+        }
+
         // Verificar contraseña encriptada con Bcrypt
         const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
         if (!isPasswordValid) {
           throw new Error("Contraseña incorrecta.");
         }
+        
+        // 🛡️ 2. SI EL LOGIN ES EXITOSO, LIMPIAMOS SU RÉCORD DE FALLOS
+        loginRateLimitMap.delete(credentials.email);
         
         return { id: user.id, name: user.name, email: user.email, role: user.role };
       },

@@ -5,22 +5,54 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { z } from "zod"; 
-import toast from "react-hot-toast"; // 👈 Integración de alertas premium
-import { ChevronRight, ChevronLeft, Sparkles, Activity, HeartPulse, ShieldAlert, Apple, Pill } from "lucide-react"; // 👈 Íconos para microinteracciones
+import toast from "react-hot-toast"; 
+import { ChevronRight, ChevronLeft, Sparkles, Activity, HeartPulse, ShieldAlert, Apple, Pill } from "lucide-react"; 
 
 // ==========================================
-// 🛡️ REGLAS ESTRICTAS DE ZOD
+// 🛡️ REGLAS ESTRICTAS DE ZOD (HACKEADAS PARA 100% ESPAÑOL)
 // ==========================================
 const step1Schema = z.object({
-  age: z.number({ invalid_type_error: "Debe ser un número válido" }).min(18, "Debes ser mayor de 18 años").max(120, "Edad irreal"),
-  weight: z.number({ invalid_type_error: "Debe ser un número válido" }).min(30, "Peso mínimo 30kg").max(300, "Peso irreal"),
-  height: z.number({ invalid_type_error: "Debe ser un número válido" }).min(100, "Altura mínima 100cm").max(250, "Altura irreal"),
-  waist: z.number().min(40).max(200).optional().or(z.literal('')),
+  age: z.any()
+    .refine(val => val !== "" && val !== undefined && val !== null, "Este campo es obligatorio")
+    .transform(val => Number(val))
+    .refine(val => !isNaN(val), "Debe ser un número")
+    .refine(val => val >= 18, "Debes ser mayor de 18 años")
+    .refine(val => val <= 120, "Edad irreal"),
+  
+  weight: z.any()
+    .refine(val => val !== "" && val !== undefined && val !== null, "Este campo es obligatorio")
+    .transform(val => Number(val))
+    .refine(val => !isNaN(val), "Debe ser un número")
+    .refine(val => val >= 30, "Peso mínimo 30kg")
+    .refine(val => val <= 300, "Peso irreal"),
+  
+  height: z.any()
+    .refine(val => val !== "" && val !== undefined && val !== null, "Este campo es obligatorio")
+    .transform(val => Number(val))
+    .refine(val => !isNaN(val), "Debe ser un número")
+    .refine(val => val >= 100, "Altura mínima 100cm")
+    .refine(val => val <= 250, "Altura irreal"),
+  
+  // La cintura sigue siendo opcional
+  waist: z.any()
+    .transform(val => (val === "" || val === undefined) ? undefined : Number(val))
+    .refine(val => val === undefined || (!isNaN(val) && val >= 40 && val <= 200), "Cintura irreal (40-200)"),
 });
 
 const step3Schema = z.object({
-  fastingGlucose: z.number().min(40).max(500).optional().or(z.literal('')),
-  systolicPressure: z.number().min(70).max(250).optional().or(z.literal('')),
+  fastingGlucose: z.any()
+    .refine(val => val !== "" && val !== undefined && val !== null, "Este dato es obligatorio")
+    .transform(val => Number(val))
+    .refine(val => !isNaN(val), "Debe ser un número")
+    .refine(val => val >= 40, "El valor mínimo es 40")
+    .refine(val => val <= 500, "Valor irreal"),
+  
+  systolicPressure: z.any()
+    .refine(val => val !== "" && val !== undefined && val !== null, "Este dato es obligatorio")
+    .transform(val => Number(val))
+    .refine(val => !isNaN(val), "Debe ser un número")
+    .refine(val => val >= 70, "El valor mínimo es 70")
+    .refine(val => val <= 250, "Valor irreal"),
 });
 
 export default function DiagnosticWizard() {
@@ -49,9 +81,12 @@ export default function DiagnosticWizard() {
 
   const nextStep = () => {
     if (step === 1) {
+      // 🚀 Ahora simplemente le pasamos a Zod los textos crudos, él se encarga de todo
       const parsedData = {
-        age: Number(formData.age), weight: Number(formData.weight),
-        height: Number(formData.height), waist: formData.waist ? Number(formData.waist) : ''
+        age: formData.age, 
+        weight: formData.weight,
+        height: formData.height, 
+        waist: formData.waist
       };
       
       const validation = step1Schema.safeParse(parsedData);
@@ -59,7 +94,7 @@ export default function DiagnosticWizard() {
         const newErrors: any = {};
         validation.error.issues.forEach(issue => { newErrors[issue.path[0]] = issue.message; });
         setErrors(newErrors);
-        toast.error("Por favor, revisa los campos en rojo."); // 👈 Microinteracción de error
+        toast.error("Por favor, revisa los campos en rojo."); 
         return; 
       }
     }
@@ -73,9 +108,10 @@ export default function DiagnosticWizard() {
   };
 
   const handleSubmit = async () => {
+    // 🚀 Pasamos los textos crudos también aquí
     const parsedStep3 = {
-      fastingGlucose: formData.fastingGlucose ? Number(formData.fastingGlucose) : '',
-      systolicPressure: formData.systolicPressure ? Number(formData.systolicPressure) : '',
+      fastingGlucose: formData.fastingGlucose,
+      systolicPressure: formData.systolicPressure,
     };
     
     const validation = step3Schema.safeParse(parsedStep3);
@@ -83,7 +119,7 @@ export default function DiagnosticWizard() {
       const newErrors: any = {};
       validation.error.issues.forEach(issue => { newErrors[issue.path[0]] = issue.message; });
       setErrors(newErrors);
-      toast.error("Datos clínicos fuera de rangos normales.");
+      toast.error("Datos clínicos incompletos."); 
       return;
     }
 
@@ -106,13 +142,13 @@ export default function DiagnosticWizard() {
       if (data.success) {
         setResult(data.diagnostic);
         setStep(5);
-        toast.success("Análisis completado con éxito."); // 👈 Éxito
+        toast.success("Análisis completado con éxito."); 
       } else {
-        toast.error(data.error); // 👈 Reemplazo de alert()
+        toast.error(data.error); 
         setStep(3); 
       }
     } catch (e) {
-      toast.error("Error de conexión. Intente nuevamente."); // 👈 Reemplazo de alert()
+      toast.error("Error de conexión. Intente nuevamente."); 
       setStep(3);
     } finally {
       setIsAnalyzing(false);
@@ -236,24 +272,23 @@ export default function DiagnosticWizard() {
           {/* PASO 3: DATOS CLÍNICOS */}
           {step === 3 && (
             <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-              <h2 className="text-2xl font-playfair text-[#2C332B] mb-2">Datos Clínicos</h2>
-              <p className="text-xs text-[#2C332B]/50 font-inter mb-6">Si no conoces estos datos, puedes dejarlos en blanco.</p>
+              <h2 className="text-2xl font-playfair text-[#2C332B] mb-6">Datos Clínicos</h2>
               
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="group">
-                    <label className="block text-sm font-inter text-[#2C332B]/70 mb-2 transition-colors group-focus-within:text-[#6B8E7D]">Glucosa en Ayunas (mg/dL)</label>
-                    <input type="text" inputMode="numeric" name="fastingGlucose" value={formData.fastingGlucose} onChange={handleNumberInput} placeholder="Ej. 95" className={`w-full bg-[#F8F6F0] p-4 rounded-2xl outline-none font-inter transition-all focus:bg-white focus:ring-2 focus:ring-[#6B8E7D]/30 ${errors.fastingGlucose ? 'border border-red-500/50' : 'border border-transparent'}`} />
+                    <label className="block text-sm font-inter text-[#2C332B]/70 mb-2 transition-colors group-focus-within:text-[#6B8E7D]">Glucosa en Ayunas (mg/dL) *</label>
+                    <input type="text" inputMode="numeric" name="fastingGlucose" value={formData.fastingGlucose} onChange={handleNumberInput} placeholder="Ej. 95" className={`w-full bg-[#F8F6F0] p-4 rounded-2xl outline-none font-inter transition-all focus:bg-white focus:ring-2 focus:ring-[#6B8E7D]/30 ${errors.fastingGlucose ? 'border border-red-500/50 focus:ring-red-500/30' : 'border border-transparent'}`} />
                     <InputError msg={errors.fastingGlucose} />
                   </div>
                   <div className="group">
-                    <label className="block text-sm font-inter text-[#2C332B]/70 mb-2 transition-colors group-focus-within:text-[#6B8E7D]">Presión Sistólica (mmHg)</label>
-                    <input type="text" inputMode="numeric" name="systolicPressure" value={formData.systolicPressure} onChange={handleNumberInput} placeholder="Ej. 120" className={`w-full bg-[#F8F6F0] p-4 rounded-2xl outline-none font-inter transition-all focus:bg-white focus:ring-2 focus:ring-[#6B8E7D]/30 ${errors.systolicPressure ? 'border border-red-500/50' : 'border border-transparent'}`} />
+                    <label className="block text-sm font-inter text-[#2C332B]/70 mb-2 transition-colors group-focus-within:text-[#6B8E7D]">Presión Sistólica (mmHg) *</label>
+                    <input type="text" inputMode="numeric" name="systolicPressure" value={formData.systolicPressure} onChange={handleNumberInput} placeholder="Ej. 120" className={`w-full bg-[#F8F6F0] p-4 rounded-2xl outline-none font-inter transition-all focus:bg-white focus:ring-2 focus:ring-[#6B8E7D]/30 ${errors.systolicPressure ? 'border border-red-500/50 focus:ring-red-500/30' : 'border border-transparent'}`} />
                     <InputError msg={errors.systolicPressure} />
                   </div>
                 </div>
 
-                <div className="bg-[#F8F6F0] p-5 rounded-3xl flex items-center justify-between group hover:bg-[#EFECE5] transition-colors">
+                <div className="bg-[#F8F6F0] p-5 rounded-3xl flex items-center justify-between group hover:bg-[#EFECE5] transition-colors mt-2">
                   <div className="flex gap-4 items-center">
                     <div className="p-2 bg-white rounded-full text-[#6B8E7D] shadow-sm"><Pill size={18}/></div>
                     <div>
