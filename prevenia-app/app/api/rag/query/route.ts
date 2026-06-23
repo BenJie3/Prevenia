@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     }
 
     // Unimos todo el texto de todos los PDFs que hayas subido
-    const allContext = knowledgeBase.map(doc => `DOCUMENTO [${doc.source}]:\n${doc.content}`).join("\n\n");
+    const allContext = knowledgeBase.map((doc: any) => `DOCUMENTO [${doc.source}]:\n${doc.content}`).join("\n\n");
 
     // 2. EL PROMPT MÉDICO ESTRICTO (El núcleo del RAG)
     const prompt = `

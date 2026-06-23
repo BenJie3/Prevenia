@@ -17,7 +17,7 @@ export async function POST(request: Request) {
 
     // 1. EXTRAER TEXTO CON pdf2json
     const pdfText = await new Promise<string>((resolve, reject) => {
-      const pdfParser = new PDFParser(null, 1); 
+      const pdfParser = new PDFParser(null, true); 
 
       pdfParser.on("pdfParser_dataError", (errData: any) => reject(errData.parserError));
       pdfParser.on("pdfParser_dataReady", () => {
