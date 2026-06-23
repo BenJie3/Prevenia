@@ -323,8 +323,8 @@ export default function PatientDashboard() {
   const emptySlots = Array(Math.max(0, 6 - glucoseRecords.length)).fill({ value: null, date: "--", isReal: false });
   const chartData = [...emptySlots, ...glucoseRecords];
 
-  const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } };
-  const itemVariants = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100, damping: 20 } } };
+const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+  const itemVariants = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 100, damping: 20 } } };
 
   if (status === "loading" || isLoadingHistory) {
     return (
