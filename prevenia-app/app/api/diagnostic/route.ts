@@ -5,6 +5,8 @@ import { getServerSession } from "next-auth/next"; //Importar sesión del servid
 import fs from "fs/promises";
 import path from "path";
 
+export const maxDuration = 60;
+
 const apiKey = process.env.GEMINI_API_KEY || "";
 const genAI = new GoogleGenerativeAI(apiKey);
 
