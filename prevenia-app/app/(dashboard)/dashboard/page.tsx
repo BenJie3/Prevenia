@@ -37,11 +37,14 @@ export default function PatientDashboard() {
 
   // INICIALIZACIÓN ÚNICA
   useEffect(() => {
-    if (session?.user?.id && !hasInitialized) {
-      setDisplayName(session.user.name || "Paciente");
-      setEditName(session.user.name || ""); 
+    // 👈 TRUCO: Le decimos a TypeScript que ignore sus reglas estrictas aquí
+    const userId = (session?.user as any)?.id; 
+
+    if (userId && !hasInitialized) {
+      setDisplayName(session?.user?.name || "Paciente");
+      setEditName(session?.user?.name || ""); 
       
-      fetch(`/api/diagnostic?userId=${session.user.id}`)
+      fetch(`/api/diagnostic?userId=${userId}`) // 👈 Usamos la variable segura
         .then((res) => res.json())
         .then((data) => {
           if (data.success) setHistory(data.history);
