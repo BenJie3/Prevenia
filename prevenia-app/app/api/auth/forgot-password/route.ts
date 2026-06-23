@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     });
 
     // 4. Enviar el correo usando tu cuenta de Gmail
-    await sendPasswordResetEmail(user.email, token, user.name || "");
+    await sendPasswordResetEmail(user.email || "", token, user.name || "");
 
     return NextResponse.json({ success: true });
 
