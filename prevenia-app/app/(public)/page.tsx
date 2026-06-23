@@ -11,9 +11,9 @@ export default function LandingPage() {
   const parallaxUp = useTransform(scrollY, [0, 1000], [0, 80]);
   const parallaxDown = useTransform(scrollY, [0, 1000], [0, -80]);
 
-  const fadeUp = {
+const fadeUp = {
     hidden: { opacity: 0, y: 60 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.9, ease: "easeOut" } }
+    visible: { opacity: 1, y: 0, transition: { duration: 0.9, ease: "easeOut" as const } } // EL CANDADO DE SEGURIDAD
   };
 
   const [openFaq, setOpenFaq] = useState<number | null>(null);
